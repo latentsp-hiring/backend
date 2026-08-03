@@ -38,6 +38,28 @@ Each file contains detailed requirements in comments. Read them first.
 - [ ] Validate event types: `paystubs.added`, `paystubs.updated`, `paystubs.fully_synced`, `paystubs.partially_synced`
 - [ ] Export schema and TypeScript type
 
+> **The acceptance criteria are the floor, not the ceiling.** They describe what the
+> integration does when everything goes right. See "Don't assume the other side behaves"
+> below.
+
+---
+
+## Don't assume the other side behaves
+
+You are integrating with a system you do not control, over a network you do not control.
+The mock server is written to behave like a real third-party provider rather than a
+well-mannered test fixture: it does not always do what its documentation implies, and it
+does not always do the same thing twice.
+
+We are not going to tell you how it misbehaves — working that out is part of the exercise.
+Run it, send it traffic, watch what actually arrives at your endpoint and what the API
+actually returns, and decide for yourself what your code needs to survive.
+
+Then say in your write-up what you found and what you chose to handle. **We would much
+rather read "I noticed X and deliberately didn't handle it because Y" than see it silently
+unhandled.** Deciding what to skip in 1.5 hours is part of the answer, and we grade the
+reasoning, not just the code.
+
 ---
 
 ## Reference Code
@@ -128,7 +150,88 @@ Check Prisma Studio (`pnpm db:studio`) to see if paystubs were synced.
 
 The binary implements an Argyle Mock Server that simulates a payroll/paystub API with webhook functionality.
 It generates fake paystub data, sends webhook events (like `paystubs.added`, `paystubs.updated`, `paystubs.fully_synced`) to a registered callback URL, and exposes REST endpoints for querying paystubs.
-The server includes a comprehensive chaos engineering system that intentionally introduces data, state, timing, order, network or security failures.
+
+It also takes a `--chaos-level <0-100>` flag (default: 25) controlling how often it injects
+failures. You can turn it up — or down to `0` if you want a quiet baseline while you get
+the happy path working.
+
+---
+
+## Constraints & notes
+
+- **AI / coding agents are welcome for the code.** Use Copilot, Cursor, Claude, ChatGPT,
+  or whatever you like — we expect you to. How you use them, and where you apply your own
+  judgment on top, is part of what we're interested in.
+- **`WRITEUP.md` is yours alone.** Do not use an AI to write it. It is short, and it is
+  the part of the submission we read most carefully — we want your reasoning in your
+  words, not a model's summary of your code. Non-native English, typos and rough edges are
+  completely fine and are never held against you.
+- Commit as you go. We read the git history, and an honest history with dead ends in it
+  reads better than one tidy commit.
+
+---
+
+## Write-up
+
+Add a `WRITEUP.md` at the repo root. Keep it short — half a page to a page is plenty.
+Cover:
+
+1. **What you found.** What does the other side actually do that the spec doesn't mention?
+2. **What you handled, and how.** The design decisions you'd defend in review.
+3. **What you deliberately didn't handle,** and why — time, risk, or judgment.
+4. **What you'd do next** with another day.
+
+---
+
+## Repository layout
+
+```
+src/
+  lib/argyle/webhooks.ts              # you implement
+  app/api/webhooks/argyle/route.ts    # you implement
+  trigger/sync-argyle-paystubs.ts     # you implement
+  lib/argyle/client.ts                # provided — the API client
+  lib/argyle/schemas.ts               # provided — API response schemas
+prisma/schema.prisma                  # provided — database schema
+bin/
+  argyle-mock-*                       # mock Argyle server (do not edit)
+  latent-cli-*                        # submission CLI (do not edit)
+run.sh / run.ps1                      # submission wrappers (macOS·Linux / Windows)
+WRITEUP.md                            # yours
+README.md
+```
+
+You may restructure however you like.
+
+---
+
+## Submission
+
+When you're ready to submit, use the provided CLI to bundle and upload your repository.
+From the root of your assignment repo:
+
+```bash
+./run.sh publish        # macOS / Linux
+.\run.ps1 publish       # Windows (PowerShell)
+```
+
+This bundles your git repository — including the `.git` history we review, and respecting
+`.gitignore` (so `.env`, `node_modules`, etc. are excluded) — and uploads it to our
+evaluation system.
+
+### Providing Your Email
+
+The CLI needs your email address to notify you that the upload succeeded. It will:
+
+1. First try to read your email from `git config user.email`
+2. If it is not set, prompt you to enter it interactively
+3. Alternatively, pass it directly: `./run.sh publish --email you@example.com`
+
+### Confirmation
+
+After the upload completes, you will be asked to reply to the email you received for this
+assignment with your name and the repository name. Please send that reply so we can match
+your submission to your application.
 
 ---
 
