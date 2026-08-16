@@ -151,9 +151,11 @@ Check Prisma Studio (`pnpm db:studio`) to see if paystubs were synced.
 The binary implements an Argyle Mock Server that simulates a payroll/paystub API with webhook functionality.
 It generates fake paystub data, sends webhook events (like `paystubs.added`, `paystubs.updated`, `paystubs.fully_synced`) to a registered callback URL, and exposes REST endpoints for querying paystubs.
 
-It also takes a `--chaos-level <0-100>` flag (default: 25) controlling how often it injects
-failures. You can turn it up — or down to `0` if you want a quiet baseline while you get
-the happy path working.
+It injects failures from two directions, each with its own flag: `--chaos-level <0-100>`
+(default: 25) governs the webhook deliveries it sends you, and `--api-chaos-level <0-100>`
+(default: 25) governs the responses it returns from its own REST endpoints. You can turn
+either up — or set both to `0` if you want a quiet baseline while you get the happy path
+working.
 
 ---
 
