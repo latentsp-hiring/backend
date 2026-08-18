@@ -10,7 +10,7 @@ export const ArgylePaystubsQuerySchema = z.object({
   from_start_date: z.string().optional(),
   to_start_date: z.string().optional(),
   limit: z.number().optional(),
-  offset: z.number().optional(),
+  cursor: z.string().optional(),
 });
 
 /**
@@ -41,11 +41,12 @@ export const ArgylePaystubSchema = z.object({
   id: z.uuid(),
   account: z.uuid(),
   user: z.uuid(),
-  gross_pay: z.number(),
-  net_pay: z.number(),
-  deductions: z.number(),
-  taxes: z.number(),
-  hours: z.number().nullable(),
+  // Monetary amounts are decimal strings, e.g. "1290.10"
+  gross_pay: z.string(),
+  net_pay: z.string(),
+  deductions: z.string(),
+  taxes: z.string(),
+  hours: z.string().nullable(),
   currency: z.string(),
   paystub_period: ArgylePaystubPeriodSchema,
   paystub_date: z.string(),

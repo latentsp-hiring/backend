@@ -23,7 +23,7 @@ Each file contains detailed requirements in comments. Read them first.
 ## Acceptance Criteria
 
 ### Webhook Handler (`route.ts`)
-- [ ] Verify `X-Argyle-Signature` header (HMAC-SHA256) — return 401 if invalid
+- [ ] Verify `X-Argyle-Signature` header (HMAC-SHA512) — return 401 if invalid
 - [ ] Validate payload with your Zod schema — return 400 if invalid
 - [ ] Log all events to `webhook_events` table (including failures)
 - [ ] For paystub events: find income by `external_account_id`, trigger sync task
@@ -146,7 +146,7 @@ Check Prisma Studio (`pnpm db:studio`) to see if paystubs were synced.
 |----------|-------------|
 | `POST /webhooks` | Register webhook URL |
 | `POST /simulate/connect-seeded` | Trigger webhooks for seeded account |
-| `GET /paystubs?account={id}&limit={n}&offset={n}` | List paystubs (paginated) |
+| `GET /paystubs?account={id}&limit={n}` | List paystubs (paginated via `next`/`previous` cursor URLs) |
 
 The binary implements an Argyle Mock Server that simulates a payroll/paystub API with webhook functionality.
 It generates fake paystub data, sends webhook events (like `paystubs.added`, `paystubs.updated`, `paystubs.fully_synced`) to a registered callback URL, and exposes REST endpoints for querying paystubs.
