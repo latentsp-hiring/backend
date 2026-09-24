@@ -1,0 +1,44 @@
+#!/bin/sh
+# Default /app/migrate for Tidewater.
+#
+# Applies $MIGRATIONS_DIR/*.sql (default /app/migrations) to $DATABASE_PATH in
+# filename order, each file in its own transaction. The grader runs it after
+# creating the database from contract/schema.sql and contract/seed.sql.
+#
+# Replace /app/migrate in your image to use your own migration tool. A replaced
+# script is yours to maintain: the grader runs it, reports its exit code and
+# output, and checks the columns it grades, nothing more.
+set -eu
+
+: "${DATABASE_PATH:?DATABASE_PATH is not set}"
+dir="${MIGRATIONS_DIR:-/app/migrations}"
+[ -d "$dir" ] || exit 0
+
+err="$(mktemp)"
+trap 'rm -f "$err"' EXIT
+
+# Byte order, so 0010_x.sql sorts after 0009_y.sql in every locale.
+LC_ALL=C
+export LC_ALL
+
+for f in "$dir"/*.sql; do
+  [ -e "$f" ] || continue
+  name="$(basename "$f")"
+
+  # Transaction control is rejected because each file already runs inside one.
+  # Bare BEGIN/END are allowed, since CREATE TRIGGER bodies use them.
+  if grep -qiE '^[[:space:]]*(BEGIN([[:space:]]+(DEFERRED|IMMEDIATE|EXCLUSIVE))?([[:space:]]+TRANSACTION)?[[:space:]]*;|COMMIT([[:space:]]+TRANSACTION)?[[:space:]]*;|END[[:space:]]+TRANSACTION|ROLLBACK)' "$f"; then
+    echo "migrate: $name: remove BEGIN/COMMIT/ROLLBACK; each file already runs in its own transaction" >&2
+    exit 1
+  fi
+  if grep -qE '^[[:space:]]*\.' "$f"; then
+    echo "migrate: $name: remove sqlite3 dot-commands; only SQL statements are allowed" >&2
+    exit 1
+  fi
+
+  if ! { printf 'BEGIN;\n'; cat "$f"; printf '\nCOMMIT;\n'; } | sqlite3 -bail "$DATABASE_PATH" 2>"$err"; then
+    echo "migrate: $name: $(cat "$err")" >&2
+    exit 1
+  fi
+  echo "migrate: applied $name"
+done
