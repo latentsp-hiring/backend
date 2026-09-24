@@ -1,42 +1,57 @@
-# Argyle Paystub Sync — Take-Home Assignment
+# Tidewater: Argyle Paystub Sync, Take-Home Assignment
 
 ## Your Task
 
-Implement a webhook handler that receives mock Argyle paystub events, validates them, and triggers a background job to sync paystub data to our database.
+Build a service that receives Argyle paystub webhooks, validates them, and syncs the
+account's paystubs from the Argyle API into a database. Use any language and framework you
+like.
 
 **Time estimate:** 1.5 hours
 
 ---
 
-## What You'll Implement
+## What You'll Build
 
-| File | What to Build |
-|------|---------------|
-| `src/lib/argyle/webhooks.ts` | Zod schema for webhook payload validation |
-| `src/app/api/webhooks/argyle/route.ts` | POST handler for incoming webhooks |
-| `src/trigger/sync-argyle-paystubs.ts` | Background task to fetch & store paystubs |
+A service in a Docker image that meets this contract.
 
-Each file contains detailed requirements in comments. Read them first.
+| Endpoint | What it does |
+|---|---|
+| `POST /webhooks/argyle` | Receives Argyle webhook deliveries |
+| `POST /internal/sync` | Starts a sync for `{"userId", "incomeId", "argyleUserId", "argyleAccountId"}` and answers `202` with `{"run_id": "<id>"}` right away |
+| `GET /healthz` | Answers `200` once the service can take traffic |
+
+Your service gets these environment variables:
+
+| Variable | What it is |
+|---|---|
+| `PORT` | The port to listen on |
+| `DATABASE_PATH` | The SQLite database to use (see [Database](#database)) |
+| `ARGYLE_BASE_URL` | The Argyle API |
+| `ARGYLE_API_ID`, `ARGYLE_API_SECRET` | Basic-auth credentials for the Argyle API |
+| `ARGYLE_WEBHOOK_SECRET` | The secret webhook deliveries are signed with |
+
+The API is documented in [`docs/api/`](docs/api/): [overview](docs/api/overview.md),
+[paystubs](docs/api/paystubs.md) and [webhooks](docs/api/webhooks.md).
 
 ---
 
 ## Acceptance Criteria
 
-### Webhook Handler (`route.ts`)
-- [ ] Verify `X-Argyle-Signature` header (HMAC-SHA512) — return 401 if invalid
-- [ ] Validate payload with your Zod schema — return 400 if invalid
-- [ ] Log all events to `webhook_events` table (including failures)
-- [ ] For paystub events: find income by `external_account_id`, trigger sync task
+### Webhook handler (`POST /webhooks/argyle`)
+- [ ] Verify the `X-Argyle-Signature` header (HMAC-SHA512 of the raw body): return 401 if invalid
+- [ ] Validate the payload: return 400 if invalid
+- [ ] Log every delivery to `webhook_events`, failures included
+- [ ] For the paystub events the provider sends: find the income by `external_account_id`, record a `sync_runs` row, and run the sync
 - [ ] Return 200 on success
 
-### Background Task (`sync-argyle-paystubs.ts`)
-- [ ] Fetch paystubs from Argyle API (handle pagination)
-- [ ] Upsert paystubs — insert new, update existing (match by `external_id`)
-- [ ] Return `{ processed: number }`
+### Sync
+- [ ] Fetch the account's paystubs from the Argyle API, handling pagination
+- [ ] Upsert paystubs: insert new ones, update existing ones (matched by `external_id`)
+- [ ] Move the `sync_runs` row through `running` to `succeeded` or `failed`
 
-### Webhook Schema (`webhooks.ts`)
-- [ ] Validate event types: `paystubs.added`, `paystubs.updated`, `paystubs.fully_synced`, `paystubs.partially_synced`
-- [ ] Export schema and TypeScript type
+### Service
+- [ ] `POST /internal/sync` and `GET /healthz` as in the table above
+- [ ] A `Dockerfile` whose final stage builds `FROM ghcr.io/latentsp-hiring/tidewater-base:1`
 
 > **The acceptance criteria are the floor, not the ceiling.** They describe what the
 > integration does when everything goes right. See "Don't assume the other side behaves"
@@ -62,49 +77,73 @@ reasoning, not just the code.
 
 ---
 
-## Reference Code
+## The service contract
 
-Explore before you start:
+Your `Dockerfile` can use any stack in earlier stages. Its **final stage** must build
+`FROM ghcr.io/latentsp-hiring/tidewater-base:1` (its source is in
+[`images/base/`](images/base/)) and put two executables in place:
 
-- `src/lib/argyle/client.ts` — Argyle API client (use this to fetch paystubs)
-- `src/lib/argyle/schemas.ts` — Zod schemas for API responses
-- `prisma/schema.prisma` — Database schema (`paystubs`, `incomes`, `webhook_events`)
-- `src/env.ts` — Environment variables
+- **`/app/start`** starts your service in the foreground.
+- **`/app/migrate`** prepares the database. The base image already ships a default that
+  applies `migrations/*.sql` in filename order, so most people never touch it. You may
+  replace it with your own tool (for example a wrapper around `bin/rails db:migrate` or
+  `mix ecto.migrate`); a replaced `/app/migrate` is yours to maintain.
+
+A minimal Dockerfile for a Python service:
+
+```dockerfile
+FROM ghcr.io/latentsp-hiring/tidewater-base:1
+COPY . /app
+RUN chmod +x /app/start
+```
+
+You do not need Docker on your own machine: run your service directly while you work,
+and use the practice validator below to check the image builds.
+
+---
+
+## Database
+
+The grader creates the SQLite database at `$DATABASE_PATH` from
+[`contract/schema.sql`](contract/schema.sql) and [`contract/seed.sql`](contract/seed.sql),
+then runs your `/app/migrate`. Your service must not create or change tables at runtime:
+put schema changes in `migrations/NNNN_description.sql`.
+
+You may **extend** the schema freely: new tables, columns, indexes and constraints. You
+must **never remove or retype** these columns, because the grader reads them:
+
+- `paystubs`: `external_id`, `user_id`, `gross_pay` (REAL)
+- `sync_runs`: `id`, `user_id`, `status`, `created_at`
+- `webhook_events`: `failed_at`, `error`
+- `incomes`: `external_account_id`, and the seeded rows in `users` and `incomes`
+
+Build your local database the same way the grader does (needs the `sqlite3` CLI):
+
+```bash
+./scripts/init-db          # macOS / Linux
+.\scripts\init-db.ps1      # Windows (PowerShell)
+```
+
+This writes `data/dev.db`. **Commit `data/dev.db` with your work**, including the traffic
+your service recorded while you developed against the mock.
 
 ---
 
 ## Setup
 
 ### Requirements
-- Node.js **v22.19.0+** (`node -v`)
-- pnpm v9+
-- macOS or Linux (Windows: use WSL2)
+- The toolchain for the stack you choose
+- The `sqlite3` CLI
+- macOS, Linux, or Windows
 
-### Environment Variables
-
-Create `.env`:
-
-```env
-DATABASE_URL="file:./dev.db"
-ARGYLE_BASE_URL="http://localhost:8080"
-ARGYLE_ID="mock-id"
-ARGYLE_SECRET="mock-secret"
-ARGYLE_WEBHOOK_SECRET="your-webhook-secret"
-TRIGGER_SECRET_KEY="<from trigger.dev dashboard>"
-TRIGGER_PROJECT_ID="<from trigger.dev dashboard>"
-```
-
-Get Trigger.dev credentials at [trigger.dev](https://trigger.dev) (free account).
-
-### Run the App
+### Run the mock and your service
 
 ```bash
-pnpm install
-pnpm db:push
-pnpm db:generate
-pnpm dev                           # Terminal 1: Next.js app
-pnpm dlx trigger.dev@latest dev    # Terminal 2: Trigger.dev worker
-./scripts/run-mock-server          # Terminal 3: Argyle mock server
+./scripts/run-mock-server                     # Terminal 1: the Argyle mock, on :8080
+sh scripts/init-db                            # once, and whenever you add a migration
+PORT=3000 DATABASE_PATH=data/dev.db \
+ARGYLE_BASE_URL=http://localhost:8080 ARGYLE_API_ID=mock-id ARGYLE_API_SECRET=mock-secret \
+ARGYLE_WEBHOOK_SECRET=your-webhook-secret  <start your service>   # Terminal 2
 ```
 
 ---
@@ -118,13 +157,13 @@ curl -X POST http://localhost:8080/webhooks \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test",
-    "url": "http://localhost:3000/api/webhooks/argyle",
+    "url": "http://localhost:3000/webhooks/argyle",
     "secret": "your-webhook-secret",
     "events": ["paystubs.added", "paystubs.fully_synced", "paystubs.updated"]
   }'
 ```
 
-> The `secret` must match your `ARGYLE_WEBHOOK_SECRET` env var.
+> The `secret` must match your `ARGYLE_WEBHOOK_SECRET`.
 
 ### 2. Trigger a test sync
 
@@ -136,7 +175,21 @@ This uses the pre-seeded account ID (`019b41d0-7a84-72db-beab-4f62f8e86ce4`) tha
 
 ### 3. Verify
 
-Check Prisma Studio (`pnpm db:studio`) to see if paystubs were synced.
+Look at `data/dev.db` (`sqlite3 data/dev.db 'select count(*) from paystubs'`).
+
+---
+
+## Practice validator
+
+```bash
+./run.sh validate --preflight      # builds your image and checks it starts and is wired up
+./run.sh validate                  # a scored attempt: PASS n / m
+```
+
+`--preflight` tells you exactly what is wrong when your image does not build, start, or
+reach its database. It does not use an attempt; you can run it 20 times a day. A scored
+attempt reports only how many checks passed, never which. You have **three**, so save
+them for when you think you are done.
 
 ---
 
@@ -148,8 +201,7 @@ Check Prisma Studio (`pnpm db:studio`) to see if paystubs were synced.
 | `POST /simulate/connect-seeded` | Trigger webhooks for seeded account |
 | `GET /paystubs?account={id}&limit={n}` | List paystubs (paginated via `next`/`previous` cursor URLs) |
 
-The binary implements an Argyle Mock Server that simulates a payroll/paystub API with webhook functionality.
-It generates fake paystub data, sends webhook events (like `paystubs.added`, `paystubs.updated`, `paystubs.fully_synced`) to a registered callback URL, and exposes REST endpoints for querying paystubs.
+See [`docs/api/`](docs/api/) for the full reference.
 
 It injects failures from two directions, each with its own flag: `--chaos-level <0-100>`
 (default: 25) governs the webhook deliveries it sends you, and `--api-chaos-level <0-100>`
@@ -185,25 +237,36 @@ Cover:
 
 ---
 
+## Required artifacts
+
+Commit these with your work:
+
+- your service's source and a `Dockerfile` at the repo root
+- `data/dev.db`, the database your service wrote while you developed
+- `migrations/`, if you changed the schema
+- `WRITEUP.md`
+- your git history as it happened: please do not squash it
+
+---
+
 ## Repository layout
 
 ```
-src/
-  lib/argyle/webhooks.ts              # you implement
-  app/api/webhooks/argyle/route.ts    # you implement
-  trigger/sync-argyle-paystubs.ts     # you implement
-  lib/argyle/client.ts                # provided — the API client
-  lib/argyle/schemas.ts               # provided — API response schemas
-prisma/schema.prisma                  # provided — database schema
+docs/api/                 # the Argyle API reference
+contract/schema.sql       # the database the grader creates
+contract/seed.sql         # its fixture rows
+migrations/               # your schema changes, applied by /app/migrate
+data/dev.db               # yours: commit it
+images/base/              # source of the base image your Dockerfile builds FROM
+scripts/run-mock-server   # runs the Argyle mock
+scripts/init-db           # builds data/dev.db the way the grader builds its database
 bin/
-  argyle-mock-*                       # mock Argyle server (do not edit)
-  latent-cli-*                        # submission CLI (do not edit)
-run.sh / run.ps1                      # submission wrappers (macOS·Linux / Windows)
-WRITEUP.md                            # yours
-README.md
+  argyle-mock-*           # mock Argyle server (do not edit)
+  latent-cli-*            # submission CLI (do not edit)
+run.sh / run.ps1          # submission wrappers (macOS·Linux / Windows)
+Dockerfile                # yours
+WRITEUP.md                # yours
 ```
-
-You may restructure however you like.
 
 ---
 
@@ -239,9 +302,9 @@ your submission to your application.
 
 ## Documentation
 
-- [Argyle Paystubs Webhooks](https://docs.argyle.com/api-reference/paystubs-webhooks)
-- [Argyle Paystubs API](https://docs.argyle.com/api-reference/paystubs)
-- [Trigger.dev Docs](https://trigger.dev/docs)
+- [`docs/api/`](docs/api/): the reference for the mock you integrate against. Start here.
+- [Argyle Paystubs Webhooks](https://docs.argyle.com/api-reference/paystubs-webhooks) and
+  [Argyle Paystubs API](https://docs.argyle.com/api-reference/paystubs): the real API it models.
 
 ---
 
