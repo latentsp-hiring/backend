@@ -1,50 +1,24 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependencies and build output, whatever your stack
+node_modules/
+.venv/
+venv/
+__pycache__/
+target/
+dist/
+build/
+.next/
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
+# Secrets
 .env
+.env.*
 
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-/src/generated/prisma
-
-.trigger
-.pnpm-store
-
+# The mock's own state and binaries it may unpack
+db.json
 argyle-mock
 interview-checklist.md
-db.json
+
+# SQLite's side files. data/dev.db itself is a required artifact: commit it.
+data/*.db-wal
+data/*.db-shm
+
+.DS_Store

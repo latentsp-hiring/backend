@@ -1,0 +1,15 @@
+#!/bin/sh
+# Builds data/dev.db exactly the way the grader builds its database:
+# contract/schema.sql, then contract/seed.sql, then your migrations with the same
+# default migrate script the base image ships. Needs the sqlite3 CLI.
+#
+# Set MIGRATE to your own migrate command if you replaced /app/migrate.
+set -eu
+cd "$(dirname "$0")/.."
+command -v sqlite3 >/dev/null || { echo "init-db: install the sqlite3 CLI first" >&2; exit 1; }
+mkdir -p data
+rm -f data/dev.db data/dev.db-wal data/dev.db-shm
+sqlite3 -bail data/dev.db < contract/schema.sql
+sqlite3 -bail data/dev.db < contract/seed.sql
+DATABASE_PATH=data/dev.db MIGRATIONS_DIR=migrations sh "${MIGRATE:-images/base/migrate}"
+echo "init-db: data/dev.db is ready"
