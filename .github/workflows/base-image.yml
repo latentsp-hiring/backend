@@ -1,0 +1,38 @@
+# Publishes ghcr.io/latentsp-hiring/tidewater-base from images/base/ when a
+# base-v<version> tag is pushed. Runs only in the upstream repo, never in forks.
+name: base-image
+
+on:
+  push:
+    tags: ["base-v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    if: github.repository == 'latentsp-hiring/backend' || github.repository == 'latentsp-hiring/tidewater'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#base-v}" >> "$GITHUB_OUTPUT"
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: images/base
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/latentsp-hiring/tidewater-base:${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=Base image for Tidewater submissions
+      - run: echo "digest ${{ steps.build.outputs.digest }}"
