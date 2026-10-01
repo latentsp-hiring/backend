@@ -17,7 +17,7 @@ A service in a Docker image that meets this contract.
 | Endpoint | What it does |
 |---|---|
 | `POST /webhooks/argyle` | Receives Argyle webhook deliveries |
-| `POST /internal/sync` | Starts a sync for `{"userId", "incomeId", "argyleUserId", "argyleAccountId"}` and answers `202` with `{"run_id": "<id>"}` right away |
+| `POST /internal/sync` | Starts a sync for `{"userId", "incomeId", "argyleUserId", "argyleAccountId"}` and answers `202` with `{"run_id": "<id>"}` right away, where `<id>` is the `id` of the `sync_runs` row for that sync |
 | `GET /healthz` | Answers `200` once the service can take traffic |
 
 Your service gets these environment variables:
@@ -41,16 +41,18 @@ The API is documented in [`docs/api/`](docs/api/): [overview](docs/api/overview.
 - [ ] Verify the `X-Argyle-Signature` header (HMAC-SHA512 of the raw body): return 401 if invalid
 - [ ] Validate the payload: return 400 if invalid
 - [ ] Log every delivery to `webhook_events`, failures included
-- [ ] For the paystub events the provider sends: find the income by `external_account_id`, record a `sync_runs` row, and run the sync
+- [ ] For the paystub events the provider sends: find the income by `external_account_id`, write a `sync_runs` row with status `pending` before you return 200, and run the sync
 - [ ] Return 200 on success
 
 ### Sync
 - [ ] Fetch the account's paystubs from the Argyle API, handling pagination
 - [ ] Upsert paystubs: insert new ones, update existing ones (matched by `external_id`)
-- [ ] Move the `sync_runs` row through `running` to `succeeded` or `failed`
+- [ ] Move the `sync_runs` row from `pending` through `running` to `succeeded` or `failed`
 
 ### Service
 - [ ] `POST /internal/sync` and `GET /healthz` as in the table above
+- [ ] `POST /internal/sync` writes its `sync_runs` row (status `pending`) before it answers
+  `202`, and returns that row's `id` as `run_id`
 - [ ] A `Dockerfile` whose final stage builds `FROM ghcr.io/latentsp-hiring/tidewater-base:1`
 
 > **The acceptance criteria are the floor, not the ceiling.** They describe what the
@@ -88,6 +90,14 @@ Your `Dockerfile` can use any stack in earlier stages. Its **final stage** must 
   applies `migrations/*.sql` in filename order, so most people never touch it. You may
   replace it with your own tool (for example a wrapper around `bin/rails db:migrate` or
   `mix ecto.migrate`); a replaced `/app/migrate` is yours to maintain.
+
+The grader runs `/app/migrate` once, on a fresh database, before it runs `/app/start`. Do
+not call `/app/migrate` from `/app/start`: the default applies every file again, and the
+second run fails on a statement such as `CREATE TABLE`.
+
+Both `/app/start` and `/app/migrate` must begin with a `#!` line and use LF line endings.
+The repo's `.gitattributes` keeps `start`, `migrate`, `*.sh` and `migrations/*.sql` LF on
+Windows checkouts too.
 
 A minimal Dockerfile for a Python service:
 
@@ -127,6 +137,18 @@ Build your local database the same way the grader does (needs the `sqlite3` CLI)
 This writes `data/dev.db`. **Commit `data/dev.db` with your work**, including the traffic
 your service recorded while you developed against the mock.
 
+Run `init-db` once. If `data/dev.db` already exists, it refuses to run, because rebuilding
+deletes the traffic you recorded; pass `--force` to rebuild from scratch anyway. When you
+add a migration later, apply just that file to your existing `data/dev.db`, in its own
+transaction, the way the default `/app/migrate` applies each file:
+
+```bash
+sqlite3 -bail data/dev.db "BEGIN;" ".read migrations/0002_add_x.sql" "COMMIT;"
+```
+
+If you replaced `/app/migrate`, set `MIGRATE` to the path of your migrate script before
+you run `init-db`. It runs with `sh`, with `DATABASE_PATH` and `MIGRATIONS_DIR` set.
+
 ---
 
 ## Setup
@@ -140,10 +162,20 @@ your service recorded while you developed against the mock.
 
 ```bash
 ./scripts/run-mock-server                     # Terminal 1: the Argyle mock, on :8080
-sh scripts/init-db                            # once, and whenever you add a migration
+sh scripts/init-db                            # once (see Database above)
 PORT=3000 DATABASE_PATH=data/dev.db \
 ARGYLE_BASE_URL=http://localhost:8080 ARGYLE_API_ID=mock-id ARGYLE_API_SECRET=mock-secret \
 ARGYLE_WEBHOOK_SECRET=your-webhook-secret  <start your service>   # Terminal 2
+```
+
+On Windows (PowerShell):
+
+```powershell
+.\bin\argyle-mock-windows-amd64.exe              # Terminal 1 (argyle-mock-windows-arm64.exe on ARM)
+.\scripts\init-db.ps1                            # once (see Database above)
+$env:PORT = "3000"; $env:DATABASE_PATH = "data/dev.db"
+$env:ARGYLE_BASE_URL = "http://localhost:8080"; $env:ARGYLE_API_ID = "mock-id"; $env:ARGYLE_API_SECRET = "mock-secret"
+$env:ARGYLE_WEBHOOK_SECRET = "your-webhook-secret"; <start your service>   # Terminal 2
 ```
 
 ---
