@@ -15,7 +15,6 @@ build/
 # The mock's own state and binaries it may unpack
 db.json
 argyle-mock
-interview-checklist.md
 
 # SQLite's side files. data/dev.db itself is a required artifact: commit it.
 data/*.db-wal

@@ -1,0 +1,7 @@
+# These run under sh or inside the Linux container, where CRLF line endings break them.
+start text eol=lf
+migrate text eol=lf
+*.sh text eol=lf
+scripts/init-db text eol=lf
+scripts/run-mock-server text eol=lf
+migrations/*.sql text eol=lf
