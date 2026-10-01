@@ -284,6 +284,15 @@ This bundles your git repository — including the `.git` history we review, and
 `.gitignore` (so `.env`, `node_modules`, etc. are excluded) — and uploads it to our
 evaluation system.
 
+### Your AI conversations
+
+If you used AI coding tools, `publish` asks whether to include your conversations with them
+for this task (`[Y/n]`). It's optional, and you can submit either way. If it finds none on
+your computer, for example because you chatted in a browser, it asks for the path to an
+exported copy instead (Enter skips). Credentials and personal details such as emails and
+phone numbers are removed before upload. To answer without the prompt, pass
+`--transcripts=yes` or `--transcripts=no`.
+
 ### Providing Your Email
 
 The CLI needs your email address to notify you that the upload succeeded. It will:
