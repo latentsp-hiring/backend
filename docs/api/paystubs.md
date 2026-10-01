@@ -30,7 +30,8 @@ Returns one paystub object, or `404` with `{"detail": "Not found."}`.
 ## The paystub object
 
 Monetary amounts are **decimal strings** (`"1290.10"`), not numbers. Dates and
-timestamps are ISO 8601 datetimes in UTC.
+timestamps are ISO 8601 datetimes in UTC, except the earnings-line dates in
+`gross_pay_list`, which are calendar dates (`YYYY-MM-DD`).
 
 | Field | Type | Description |
 |---|---|---|
@@ -47,7 +48,7 @@ timestamps are ISO 8601 datetimes in UTC.
 | `gross_pay`, `net_pay`, `deductions`, `taxes`, `reimbursements` | decimal string | Totals for this paystub |
 | `gross_pay_ytd`, `net_pay_ytd`, `deductions_ytd`, `taxes_ytd`, `hours_ytd` | decimal string | Year-to-date totals |
 | `hours`, `fees` | decimal string, nullable | |
-| `gross_pay_list` | array | Earnings lines: `name`, `type`, `start_date`, `end_date`, `rate`, `hours`, `amount`, `hours_ytd`, `amount_ytd` |
+| `gross_pay_list` | array | Earnings lines: `name`, `type`, `start_date` and `end_date` (dates, `YYYY-MM-DD`), `rate`, `hours`, `amount`, `hours_ytd`, `amount_ytd` |
 | `gross_pay_list_totals` | object | Totals by earnings type: `amount`, `amount_ytd`, `hours`, `hours_ytd`, `rate_implied`, `rate_implied_ytd` |
 | `deduction_list` | array | `name`, `amount`, `amount_ytd`, `tax_classification` |
 | `tax_list` | array | `name`, `type`, `amount`, `amount_ytd` |
