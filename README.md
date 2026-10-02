@@ -139,15 +139,20 @@ your service recorded while you developed against the mock.
 
 Run `init-db` once. If `data/dev.db` already exists, it refuses to run, because rebuilding
 deletes the traffic you recorded; pass `--force` to rebuild from scratch anyway. When you
-add a migration later, apply just that file to your existing `data/dev.db`, in its own
-transaction, the way the default `/app/migrate` applies each file:
+add a migration later, apply just that file to your existing `data/dev.db` with the
+default migrate script, the one the grader runs as `/app/migrate` unless you replace it.
+Copy the file into an empty directory and point `MIGRATIONS_DIR` at it:
 
 ```bash
-sqlite3 -bail data/dev.db "BEGIN;" ".read migrations/0002_add_x.sql" "COMMIT;"
+tmp="$(mktemp -d)" && cp migrations/0002_add_x.sql "$tmp"/ &&
+  DATABASE_PATH=data/dev.db MIGRATIONS_DIR="$tmp" sh images/base/migrate; rm -rf "$tmp"
 ```
 
-If you replaced `/app/migrate`, set `MIGRATE` to the path of your migrate script before
-you run `init-db`. It runs with `sh`, with `DATABASE_PATH` and `MIGRATIONS_DIR` set.
+On Windows, run it from Git Bash.
+
+If you replaced `/app/migrate`, run your own script in that command instead, and set
+`MIGRATE` to its path before you run `init-db`. It runs with `sh`, with `DATABASE_PATH`
+and `MIGRATIONS_DIR` set.
 
 ---
 

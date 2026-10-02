@@ -25,8 +25,8 @@ if [ -e data/dev.db ] && [ "$force" -eq 0 ]; then
 init-db: data/dev.db already exists, so nothing was changed.
 Rebuilding it deletes every row in it, including the webhook deliveries and sync
 runs your service recorded. That traffic is part of what you commit.
-To apply one new migration to the existing database instead, run:
-  sqlite3 -bail data/dev.db "BEGIN;" ".read migrations/NNNN_description.sql" "COMMIT;"
+To apply one new migration to the existing database instead, see "Database" in
+README.md: it runs the default migrate script on just that file.
 To delete it and rebuild from scratch anyway, run: scripts/init-db --force
 EOF
   exit 1
