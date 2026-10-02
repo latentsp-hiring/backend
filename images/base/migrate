@@ -5,6 +5,10 @@
 # filename order, each file in its own transaction. The grader runs it after
 # creating the database from contract/schema.sql and contract/seed.sql.
 #
+# Each applied file's name is recorded in the _migrations table, in the same
+# transaction as the file, and a recorded file is skipped. So running it again,
+# from /app/start or on an existing data/dev.db, applies only new files.
+#
 # Replace /app/migrate in your image to use your own migration tool. A replaced
 # script is yours to maintain: the grader runs it, reports its exit code and
 # output, and checks the columns it grades, nothing more.
@@ -21,9 +25,19 @@ trap 'rm -f "$err"' EXIT
 LC_ALL=C
 export LC_ALL
 
+sqlite3 -bail "$DATABASE_PATH" "CREATE TABLE IF NOT EXISTS _migrations (
+  name TEXT PRIMARY KEY,
+  applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));"
+
 for f in "$dir"/*.sql; do
   [ -e "$f" ] || continue
   name="$(basename "$f")"
+  # SQL string literal: double any single quote in the file name.
+  quoted="'$(printf '%s' "$name" | sed "s/'/''/g")'"
+  if [ -n "$(sqlite3 -bail "$DATABASE_PATH" "SELECT 1 FROM _migrations WHERE name = $quoted;")" ]; then
+    echo "migrate: $name already applied"
+    continue
+  fi
 
   # Transaction control is rejected because each file already runs inside one.
   # Bare BEGIN/END are allowed, since CREATE TRIGGER bodies use them.
@@ -36,7 +50,8 @@ for f in "$dir"/*.sql; do
     exit 1
   fi
 
-  if ! { printf 'BEGIN;\n'; cat "$f"; printf '\nCOMMIT;\n'; } | sqlite3 -bail "$DATABASE_PATH" 2>"$err"; then
+  if ! { printf 'BEGIN;\n'; cat "$f"; printf '\nINSERT INTO _migrations (name) VALUES (%s);\nCOMMIT;\n' "$quoted"; } |
+      sqlite3 -bail "$DATABASE_PATH" 2>"$err"; then
     echo "migrate: $name: $(cat "$err")" >&2
     exit 1
   fi

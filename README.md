@@ -87,17 +87,19 @@ Your `Dockerfile` can use any stack in earlier stages. Its **final stage** must 
 
 - **`/app/start`** starts your service in the foreground.
 - **`/app/migrate`** prepares the database. The base image already ships a default that
-  applies `migrations/*.sql` in filename order, so most people never touch it. You may
+  applies `migrations/*.sql` in filename order and records each file it applied in a
+  `_migrations` table, so most people never touch it. You may
   replace it with your own tool (for example a wrapper around `bin/rails db:migrate` or
   `mix ecto.migrate`); a replaced `/app/migrate` is yours to maintain.
 
-The grader runs `/app/migrate` once, on a fresh database, before it runs `/app/start`. Do
-not call `/app/migrate` from `/app/start`: the default applies every file again, and the
-second run fails on a statement such as `CREATE TABLE`.
+The grader runs `/app/migrate` once, on a fresh database, before it runs `/app/start`.
+The default skips files it has already applied, so running it again (from `/app/start`, or
+on your `data/dev.db`) is safe. A replacement must be safe to run again too if you call it
+from `/app/start`.
 
 Both `/app/start` and `/app/migrate` must begin with a `#!` line and use LF line endings.
-The repo's `.gitattributes` keeps `start`, `migrate`, `*.sh` and `migrations/*.sql` LF on
-Windows checkouts too.
+The repo's `.gitattributes` keeps `start`, `migrate` and `*.sh` LF on Windows checkouts
+too.
 
 A minimal Dockerfile for a Python service:
 
@@ -139,13 +141,12 @@ your service recorded while you developed against the mock.
 
 Run `init-db` once. If `data/dev.db` already exists, it refuses to run, because rebuilding
 deletes the traffic you recorded; pass `--force` to rebuild from scratch anyway. When you
-add a migration later, apply just that file to your existing `data/dev.db` with the
-default migrate script, the one the grader runs as `/app/migrate` unless you replace it.
-Copy the file into an empty directory and point `MIGRATIONS_DIR` at it:
+add a migration later, run the default migrate script on your existing `data/dev.db`. It
+is the one the grader runs as `/app/migrate` unless you replace it, and it applies only
+the files it has not applied yet:
 
 ```bash
-tmp="$(mktemp -d)" && cp migrations/0002_add_x.sql "$tmp"/ &&
-  DATABASE_PATH=data/dev.db MIGRATIONS_DIR="$tmp" sh images/base/migrate; rm -rf "$tmp"
+DATABASE_PATH=data/dev.db MIGRATIONS_DIR=migrations sh images/base/migrate
 ```
 
 On Windows, run it from Git Bash.

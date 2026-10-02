@@ -2,10 +2,11 @@
 # then contract\seed.sql, then your migrations. Needs sqlite3.exe on PATH.
 #
 # The migrations step is a PowerShell port of images/base/migrate: it applies
-# migrations\*.sql in byte order of their names, rejects the same transaction
-# control and dot-command lines, and sends sqlite3 the same bytes migrate pipes
-# to it (BEGIN;, the file, COMMIT;). If the two ever disagree, images/base/migrate
-# is what the grader runs.
+# migrations\*.sql in byte order of their names, records each in _migrations and
+# skips recorded ones, rejects the same transaction control and dot-command lines,
+# and sends sqlite3 the same bytes migrate pipes to it (BEGIN;, the file, the
+# _migrations INSERT, COMMIT;). If the two ever disagree, images/base/migrate is
+# what the grader runs.
 #
 # Usage: .\scripts\init-db.ps1 [--force]
 # Refuses to replace an existing data\dev.db unless you pass --force.
@@ -30,8 +31,9 @@ if ((Test-Path (Join-Path $root "data\dev.db")) -and -not $force) {
 init-db: data\dev.db already exists, so nothing was changed.
 Rebuilding it deletes every row in it, including the webhook deliveries and sync
 runs your service recorded. That traffic is part of what you commit.
-To apply one new migration to the existing database instead, see "Database" in
-README.md: it runs the default migrate script on just that file.
+To apply new migrations to the existing database instead, run the default migrate
+on it from Git Bash; it skips the files it already applied:
+  DATABASE_PATH=data/dev.db MIGRATIONS_DIR=migrations sh images/base/migrate
 To delete it and rebuild from scratch anyway, run: .\scripts\init-db.ps1 --force
 '@)
   exit 1
@@ -60,7 +62,17 @@ try {
     $names = [string[]]@(Get-ChildItem migrations -Filter *.sql -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
     [Array]::Sort($names, [StringComparer]::Ordinal)
     $ascii = [Text.Encoding]::ASCII
+    $utf8 = New-Object Text.UTF8Encoding($false)
+    sqlite3 -bail data/dev.db "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));"
+    if ($LASTEXITCODE -ne 0) { throw "migrate: could not create _migrations" }
     foreach ($name in $names) {
+      $quoted = "'" + $name.Replace("'", "''") + "'"
+      $seen = sqlite3 -bail data/dev.db "SELECT 1 FROM _migrations WHERE name = $quoted;"
+      if ($LASTEXITCODE -ne 0) { throw "migrate: could not read _migrations" }
+      if ($seen) {
+        Write-Output "migrate: $name already applied"
+        continue
+      }
       # Raw bytes, so sqlite3 sees exactly what migrate's `cat` would give it,
       # whatever the file's encoding or line endings.
       $body = [IO.File]::ReadAllBytes((Join-Path $root "migrations\$name"))
@@ -76,7 +88,7 @@ try {
       $bytes = New-Object System.Collections.Generic.List[byte]
       $bytes.AddRange($ascii.GetBytes("BEGIN;`n"))
       $bytes.AddRange($body)
-      $bytes.AddRange($ascii.GetBytes("`nCOMMIT;`n"))
+      $bytes.AddRange($utf8.GetBytes("`nINSERT INTO _migrations (name) VALUES ($quoted);`nCOMMIT;`n"))
       [IO.File]::WriteAllBytes($wrapped, $bytes.ToArray())
       sqlite3 -bail data/dev.db ".read 'data/.migrate.sql'"
       if ($LASTEXITCODE -ne 0) { throw "migrate: $name failed" }
