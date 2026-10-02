@@ -53,7 +53,7 @@ The API is documented in [`docs/api/`](docs/api/): [overview](docs/api/overview.
 - [ ] `POST /internal/sync` and `GET /healthz` as in the table above
 - [ ] `POST /internal/sync` writes its `sync_runs` row (status `pending`) before it answers
   `202`, and returns that row's `id` as `run_id`
-- [ ] A `Dockerfile` whose final stage builds `FROM ghcr.io/latentsp-hiring/tidewater-base:1`
+- [ ] A `Dockerfile` whose final stage builds `FROM ghcr.io/latentsp-hiring/tidewater-base:2`
 
 > **The acceptance criteria are the floor, not the ceiling.** They describe what the
 > integration does when everything goes right. See "Don't assume the other side behaves"
@@ -82,7 +82,7 @@ reasoning, not just the code.
 ## The service contract
 
 Your `Dockerfile` can use any stack in earlier stages. Its **final stage** must build
-`FROM ghcr.io/latentsp-hiring/tidewater-base:1` (its source is in
+`FROM ghcr.io/latentsp-hiring/tidewater-base:2` (its source is in
 [`images/base/`](images/base/)) and put two executables in place:
 
 - **`/app/start`** starts your service in the foreground.
@@ -104,7 +104,7 @@ too.
 A minimal Dockerfile for a Python service:
 
 ```dockerfile
-FROM ghcr.io/latentsp-hiring/tidewater-base:1
+FROM ghcr.io/latentsp-hiring/tidewater-base:2
 COPY . /app
 RUN chmod +x /app/start
 ```
